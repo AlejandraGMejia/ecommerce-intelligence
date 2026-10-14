@@ -1,8 +1,6 @@
-
 from pathlib import Path
 
 import pandas as pd
-
 
 # Find the project folder
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

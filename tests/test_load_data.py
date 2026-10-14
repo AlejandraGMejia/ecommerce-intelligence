@@ -1,4 +1,3 @@
-
 """Unit tests for the Olist data loading pipeline."""
 
 import csv

@@ -1,8 +1,6 @@
-
 from pathlib import Path
 
 import pandas as pd
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
@@ -30,12 +28,9 @@ def main() -> None:
     ].copy()
 
     carrier_anomalies["time_difference_hours"] = (
-        (
-            carrier_anomalies["order_delivered_carrier_date"]
-            - carrier_anomalies["order_delivered_customer_date"]
-        ).dt.total_seconds()
-        / 3600
-    )
+        carrier_anomalies["order_delivered_carrier_date"]
+        - carrier_anomalies["order_delivered_customer_date"]
+    ).dt.total_seconds() / 3600
 
     print("\n=== CARRIER DATE ANOMALIES ===")
     print("Total:", len(carrier_anomalies))

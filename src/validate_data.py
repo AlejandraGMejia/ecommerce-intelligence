@@ -1,8 +1,6 @@
-
 from pathlib import Path
 
 import pandas as pd
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
@@ -24,13 +22,9 @@ def main() -> None:
 
     print("\n=== REFERENTIAL INTEGRITY ===")
 
-    invalid_customers = ~orders["customer_id"].isin(
-        customers["customer_id"]
-    )
+    invalid_customers = ~orders["customer_id"].isin(customers["customer_id"])
 
-    invalid_orders = ~items["order_id"].isin(
-        orders["order_id"]
-    )
+    invalid_orders = ~items["order_id"].isin(orders["order_id"])
 
     print("Orders without a valid customer:", invalid_customers.sum())
     print("Items without a valid order:", invalid_orders.sum())
@@ -40,15 +34,9 @@ def main() -> None:
 
     print("\n=== MISSING DELIVERY DATES BY STATUS ===")
 
-    missing_delivery = orders[
-        orders["order_delivered_customer_date"].isna()
-    ]
+    missing_delivery = orders[orders["order_delivered_customer_date"].isna()]
 
-    print(
-        missing_delivery["order_status"]
-        .value_counts()
-        .to_string()
-    )
+    print(missing_delivery["order_status"].value_counts().to_string())
 
 
 if __name__ == "__main__":

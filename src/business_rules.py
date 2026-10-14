@@ -1,8 +1,6 @@
-
 from pathlib import Path
 
 import pandas as pd
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
@@ -25,12 +23,8 @@ def main() -> None:
     print("\n=== BUSINESS RULE VALIDATIONS ===")
 
     # 1. Delivery date earlier than purchase date
-    invalid_delivery = (
-        orders["order_delivered_customer_date"].notna()
-        & (
-            orders["order_delivered_customer_date"]
-            < orders["order_purchase_timestamp"]
-        )
+    invalid_delivery = orders["order_delivered_customer_date"].notna() & (
+        orders["order_delivered_customer_date"] < orders["order_purchase_timestamp"]
     )
 
     print(
@@ -39,12 +33,8 @@ def main() -> None:
     )
 
     # 2. Approval earlier than purchase
-    invalid_approval = (
-        orders["order_approved_at"].notna()
-        & (
-            orders["order_approved_at"]
-            < orders["order_purchase_timestamp"]
-        )
+    invalid_approval = orders["order_approved_at"].notna() & (
+        orders["order_approved_at"] < orders["order_purchase_timestamp"]
     )
 
     print(
