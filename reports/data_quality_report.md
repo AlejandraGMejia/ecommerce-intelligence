@@ -52,3 +52,57 @@ No missing values were detected in the customers or order_items tables.
 
 Initial data quality assessment completed for three tables.
 Further validation is required.
+
+## Business Rule Investigation
+
+### Summary
+
+Six business rules were evaluated across the orders and order items datasets.
+
+Four rules returned zero violations.
+
+Two rules identified a total of 31 distinct affected orders.
+
+### Carrier Handoff Anomalies
+
+- Affected orders: 23
+- Minimum temporal inversion: 0.39 hours
+- Median temporal inversion: 39.86 hours
+- Mean temporal inversion: 78.46 hours
+- Maximum temporal inversion: 386.31 hours
+
+All 23 affected orders have a delivered status.
+
+These records contain customer delivery timestamps earlier than
+their recorded carrier handoff timestamps.
+
+### Missing Delivery Timestamps
+
+Eight orders have a delivered status but no customer delivery timestamp.
+
+Seven have a recorded carrier handoff timestamp.
+One has neither a carrier handoff nor a customer delivery timestamp.
+
+### Overlap
+
+No orders are affected by both anomaly categories.
+
+### Data Quality Policy
+
+1. Preserve all original source records.
+2. Do not infer or fabricate missing delivery timestamps.
+3. Flag inconsistent temporal sequences for investigation.
+4. Exclude reversed carrier-to-customer intervals from
+   transportation-duration metrics.
+5. Exclude missing customer delivery timestamps from metrics
+   requiring actual delivery dates.
+6. Retain otherwise valid records for unrelated analyses.
+7. Document exclusions and denominators for calculated KPIs.
+
+### Limitations
+
+The dataset does not provide sufficient information to determine
+the root cause of timestamp inconsistencies.
+
+Anomalies are identified using reproducible rules, rather than
+automatically classified as incorrect source records.
