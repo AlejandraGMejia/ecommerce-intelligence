@@ -5,13 +5,13 @@
 
 An end-to-end e-commerce analytics project based on the Brazilian E-Commerce Public Dataset by Olist.
 
-This project transforms historical transactional data into actionable business insights using Python, PostgreSQL, SQL, data quality validation, automated testing, and executive visualizations.
+This project transforms historical transactional data into business insights using Python, PostgreSQL, SQL, data quality validation, automated testing, and executive visualizations.
 
-**Status:** In Development
+**Project Status:** In Development
 
 ## 1. Project Overview
 
-The objective is to demonstrate practical Data Analytics and Data Engineering skills through a reproducible e-commerce data workflow.
+The objective is to demonstrate practical Data Analytics and Data Engineering skills through a structured e-commerce data workflow.
 
 The project combines:
 
@@ -32,7 +32,7 @@ The project combines:
 5. Which geographic regions generate the most business activity?
 6. How do customer retention and purchasing patterns evolve?
 
-The first four questions have been investigated. Geographic analysis and customer retention are planned.
+The first five questions have been investigated. Customer retention and cohort analysis are planned.
 
 ## 2. Technology Stack
 
@@ -75,10 +75,10 @@ The project follows a modular workflow:
 
 The relational model includes:
 
-- `orders.customer_id` → `customers.customer_id`
-- `order_items.order_id` → `orders.order_id`
-- `order_items.product_id` → `products.product_id`
-- `reviews.order_id` → `orders.order_id`
+- `orders.customer_id` references `customers.customer_id`.
+- `order_items.order_id` references `orders.order_id`.
+- `order_items.product_id` references `products.product_id`.
+- `reviews.order_id` references `orders.order_id`.
 
 The `reviews` table uses an internal primary key because source `review_id` values are not unique.
 
@@ -160,11 +160,11 @@ An order is considered late when its actual delivery calendar date is after the 
 - Most valid delivered orders arrived on or before their estimated delivery dates.
 - March 2018 recorded the highest monthly late-delivery rate in the analyzed period: **18.96%**.
 - February 2018 also showed elevated delays at **14.13%**.
-- June 2018 recorded the lowest monthly late-delivery rate: **1.16%**.
+- June 2018 recorded a substantially lower monthly late-delivery rate of **1.16%**.
 
 The monthly visualization covers January 2017 through August 2018.
 
-The monthly population contains **96,184 valid orders**, while overall delivery KPIs include the valid orders from 2016.
+The monthly population contains **96,184 valid orders**, while the overall delivery analysis includes 96,447 valid orders.
 
 Orders with missing actual delivery dates or inconsistent chronological sequences are excluded from these metrics without modifying the source data.
 
@@ -193,7 +193,7 @@ Because some orders contain multiple review records, scores are averaged at the 
 
 This is an observational association, not evidence that delivery delays alone cause negative customer reviews.
 
-### Sensitivity Analysis
+**Sensitivity Analysis**
 
 A separate analysis excluded orders with multiple reviews.
 
@@ -204,6 +204,62 @@ A separate analysis excluded orders with multiple reviews.
 | Low-rating rate | 9.24% | 62.36% |
 
 The results remained nearly identical, suggesting that the main association is not driven primarily by orders with multiple review records.
+
+### 4.6 Geographic Sales Performance
+
+Geographic performance is analyzed using the customer state associated with each delivered order.
+
+The analysis combines `customers`, `orders`, and `order_items` to calculate delivered-order counts and item values by Brazilian state.
+
+Order-level item values are aggregated before calculating state-level metrics to prevent orders containing multiple items from being counted more than once.
+
+![Geographic E-Commerce Performance](reports/figures/geographic_performance.png)
+
+**Geographic Coverage**
+
+- **27** Brazilian states and federal units represented.
+- **96,478** delivered orders analyzed.
+- **110,197** delivered order items.
+- **R$ 13,221,498.11** in total delivered-order item value.
+
+**Top 5 States by Delivered Item Value**
+
+| State | Delivered Orders | Item Value | Value Share |
+|---|---:|---:|---:|
+| São Paulo (SP) | 40,501 | R$ 5,067,633.16 | 38.33% |
+| Rio de Janeiro (RJ) | 12,350 | R$ 1,759,651.13 | 13.31% |
+| Minas Gerais (MG) | 11,354 | R$ 1,552,481.83 | 11.74% |
+| Rio Grande do Sul (RS) | 5,345 | R$ 728,897.47 | 5.51% |
+| Paraná (PR) | 4,923 | R$ 666,063.51 | 5.04% |
+
+**Key Findings**
+
+- São Paulo represents **41.98% of delivered orders** but **38.33% of delivered item value**.
+- São Paulo, Rio de Janeiro, and Minas Gerais collectively account for approximately **63.38%** of delivered item value.
+- Geographic activity is highly concentrated in a small number of states.
+- High order volume does not necessarily correspond to high average item value per order.
+
+**Average Item Value per Delivered Order**
+
+| State | Delivered Orders | Average Item Value |
+|---|---:|---:|
+| Paraíba (PB) | 517 | R$ 217.77 |
+| Ceará (CE) | 1,279 | R$ 171.82 |
+| Pernambuco (PE) | 1,593 | R$ 158.12 |
+| Bahia (BA) | 3,256 | R$ 151.59 |
+| São Paulo (SP) | 40,501 | R$ 125.12 |
+
+Paraíba has a substantially higher average item value per delivered order than São Paulo, despite representing a much smaller share of total activity.
+
+**Analytical Considerations**
+
+The visualization of states with the highest average item value uses a minimum threshold of **500 delivered orders per state**.
+
+This threshold reduces the emphasis on very small samples but does not guarantee statistical stability or establish commercial attractiveness.
+
+Customer location is used as a geographic approximation of purchasing activity. It does not represent seller location, product origin, or the location where payment was processed.
+
+These findings support further investigation of regional demand, order composition, product categories, and logistics before making geographic expansion recommendations.
 
 ## 5. Data Quality Findings
 
@@ -254,7 +310,36 @@ A source review identifier may occur across different orders. Therefore, the dat
 
 For satisfaction comparisons, review scores are aggregated to one observation per order.
 
-### 5.4 Analytical Reconciliation
+### 5.4 Geographic Data Quality
+
+Geographic analysis covers all 27 Brazilian states and federal units represented in the customer dataset.
+
+The analysis groups delivered orders by the state of the associated customer.
+
+Validation checks include:
+
+- Expected geographic coverage.
+- Missing state values.
+- Duplicate state records in aggregated results.
+- Invalid or missing geographic KPI values.
+- Nonpositive delivered-order counts.
+- Delivered-order total reconciliation.
+- Monetary total reconciliation.
+
+**Geographic Reconciliation Results**
+
+| Metric | Expected | Actual | Status |
+|---|---:|---:|---|
+| Delivered orders | 96,478 | 96,478 | Passed |
+| Delivered order items | 110,197 | 110,197 | Passed |
+| Delivered item value | R$ 13,221,498.11 | R$ 13,221,498.11 | Passed |
+| Geographic units | 27 | 27 | Passed |
+
+The delivered-item count was checked separately through SQL. The Python visualization validates state coverage, delivered-order totals, and monetary totals.
+
+These checks confirm consistency for the historical Olist dataset used in this project.
+
+### 5.5 Analytical Reconciliation
 
 Joining delivered order items with the product catalog preserved the overall delivered-order item value:
 
@@ -263,10 +348,13 @@ Joining delivered order items with the product catalog preserved the overall del
 Additional reconciliation confirmed:
 
 - 96,447 valid orders in the overall delivery analysis.
-- 96,184 valid orders in the January 2017–August 2018 monthly analysis.
+- 96,184 valid orders in the January 2017–August 2018 monthly delivery analysis.
 - 95,801 valid delivered orders with at least one review in the satisfaction analysis.
+- 96,478 delivered orders in the geographic sales analysis.
 
-These populations are intentionally different and should not be mixed without checking their definitions.
+These populations intentionally differ because each analysis applies its own business rules.
+
+They should not be combined without considering their definitions.
 
 ## 6. Project Structure
 
@@ -281,7 +369,8 @@ ecommerce-intelligence/
 │       ├── monthly_sales_executive.png
 │       ├── top_categories.png
 │       ├── monthly_delivery_performance.png
-│       └── delivery_vs_satisfaction.png
+│       ├── delivery_vs_satisfaction.png
+│       └── geographic_performance.png
 ├── sql/
 │   ├── 01_create_tables.sql
 │   ├── 02_business_kpis.sql
@@ -292,7 +381,8 @@ ecommerce-intelligence/
 │   ├── 07_delivery_performance.sql
 │   ├── 08_monthly_delivery_performance.sql
 │   ├── 09_create_reviews_table.sql
-│   └── 10_delivery_vs_reviews.sql
+│   ├── 10_delivery_vs_reviews.sql
+│   └── 11_geographic_performance.sql
 ├── src/
 │   ├── business_rules.py
 │   ├── explore_data.py
@@ -304,10 +394,12 @@ ecommerce-intelligence/
 │   ├── visualize_sales.py
 │   ├── visualize_categories.py
 │   ├── visualize_delivery.py
-│   └── visualize_satisfaction.py
+│   ├── visualize_satisfaction.py
+│   └── visualize_geography.py
 ├── tests/
 │   ├── test_data_quality.py
 │   ├── test_delivery_rules.py
+│   ├── test_geographic_performance.py
 │   ├── test_load_data.py
 │   └── test_load_products.py
 ├── README.md
@@ -385,7 +477,7 @@ Load the product catalog before loading order items.
 python src/load_data.py
 ```
 
-The loader checks the source files and compares expected row counts with the database.
+The loader checks source files and compares expected row counts with the database.
 
 ### 7.6 Apply the Product Relationship Migration
 
@@ -431,6 +523,9 @@ psql -h localhost -U ecommerce_user -d ecommerce_db \
 
 psql -h localhost -U ecommerce_user -d ecommerce_db \
   -f sql/10_delivery_vs_reviews.sql
+
+psql -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/11_geographic_performance.sql
 ```
 
 ### 7.9 Generate Visualizations
@@ -440,6 +535,7 @@ python src/visualize_sales.py
 python src/visualize_categories.py
 python src/visualize_delivery.py
 python src/visualize_satisfaction.py
+python src/visualize_geography.py
 ```
 
 Generated charts are saved under `reports/figures/`.
@@ -452,9 +548,11 @@ ruff format --check src/ tests/
 python -m pytest tests/ -v
 ```
 
-**Current automated test status: 20 passing tests.**
+**Current automated test status: 24 passing tests.**
 
-The test suite covers selected data quality rules, source validation functions, and delivery date logic.
+The test suite covers selected data quality rules, source validation functions, delivery date logic, and geographic KPI validation.
+
+Geographic tests use synthetic data to verify that duplicate states and incorrect aggregate totals are rejected.
 
 These tests do not yet provide complete end-to-end database integration coverage.
 
@@ -467,6 +565,10 @@ These tests do not yet provide complete end-to-end database integration coverage
 - Some review identifiers are repeated, and some orders have multiple review records.
 - Delivery punctuality is assessed using calendar dates rather than exact time-of-day deadlines.
 - The relationship between delivery delays and customer satisfaction is observational, not causal.
+- Geographic analysis uses customer location, not seller location or fulfillment origin.
+- High average item values in smaller states require additional investigation before supporting business recommendations.
+- The 500-order threshold in the geographic visualization is a descriptive filter rather than a statistical guarantee.
+- Some validation rules use known Olist record counts and monetary totals, limiting immediate reuse with other datasets.
 - Existing-data checks in the loaders rely primarily on record counts rather than full content reconciliation.
 - The `--reload` option in `src/load_data.py` has not been updated and integration-tested for the additional `reviews` foreign-key dependency. It must not be used on the current database until this is resolved.
 - The initial database setup is designed for a local PostgreSQL environment.
@@ -478,7 +580,6 @@ Planned improvements include:
 
 ### Data Analytics
 
-- Geographic order analysis
 - Customer retention and cohort analysis
 - Customer segmentation and RFM analysis
 - Customer lifetime value estimates with explicit methodological limitations
