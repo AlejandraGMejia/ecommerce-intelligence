@@ -5,9 +5,9 @@
 
 An end-to-end e-commerce analytics project based on the Brazilian E-Commerce Public Dataset by Olist.
 
-This project transforms historical transactional data into business insights using Python, PostgreSQL, SQL, data quality validation, automated testing, and executive visualizations.
+This project transforms historical transactional data into business insights using Python, PostgreSQL, SQL, relational data modeling, data quality validation, automated analytical pipelines, automated testing, and executive visualizations.
 
-**Project Status:** In Development — Six Analytical Modules Implemented
+**Project Status:** In Development — Six Analytical Modules and an Initial Automated BI Data Mart Implemented
 
 ## 1. Project Overview
 
@@ -21,6 +21,9 @@ The project combines:
 - SQL business analysis
 - Executive data visualization
 - Customer retention and segmentation
+- Analytics data mart development
+- Automated SQL exports and pipeline orchestration
+- Data quality gates and atomic CSV exports
 - Automated testing
 - Business insight communication
 
@@ -34,36 +37,43 @@ The project combines:
 6. How do customer retention and purchasing patterns evolve?
 7. Which customers contribute the most monetary value, and how can their purchasing behavior be segmented?
 
-All seven questions have been investigated through six analytical modules. Pipeline integration, automation, and executive dashboard development remain planned.
+All seven questions have been investigated through six analytical modules.
+
+An initial analytics data mart, automated exports, and quality gate have also been implemented. Executive dashboard development and full end-to-end database reconstruction remain planned.
 
 ## 2. Technology Stack
 
 | Technology | Purpose |
 |---|---|
-| Python | Data ingestion, validation, and visualization |
+| Python | Data ingestion, pipeline orchestration, validation, and visualization |
 | Pandas | Data exploration and transformation |
-| PostgreSQL | Relational storage and integrity constraints |
-| SQL | Business analytics and KPI calculations |
+| PostgreSQL | Relational storage, analytical views, and integrity constraints |
+| SQL | Business analytics, data mart queries, and KPI calculations |
+| Psycopg | PostgreSQL connectivity and analytical exports |
 | Matplotlib | Executive visualizations |
 | NumPy | Numerical validation and cohort matrices |
-| Pytest | Automated testing |
+| Pytest | Automated testing and failure simulation |
 | Ruff | Python linting and formatting |
 | Git & GitHub | Version control |
 
 ## 3. Data Architecture
 
-The project follows a modular workflow:
+The project follows a modular architecture that separates source data, relational storage, business analysis, analytical outputs, and quality assurance.
+
+### 3.1 Data Workflow
 
 1. **Source Data:** Historical Olist CSV files.
 2. **Data Exploration:** Schema inspection, missing values, duplicates, and anomalies.
-3. **Data Ingestion:** Python scripts load data into PostgreSQL.
+3. **Data Ingestion:** Python scripts load source data into PostgreSQL.
 4. **Relational Modeling:** Primary and foreign keys enforce integrity.
-5. **Data Validation:** Checks verify source structure, counts, and relationships.
-6. **Business Analysis:** SQL queries calculate operational and commercial metrics.
-7. **Visualization:** Python scripts generate executive charts.
-8. **Quality Assurance:** Pytest and Ruff support code reliability.
+5. **Business Analysis:** SQL queries calculate operational and commercial metrics.
+6. **Analytics Data Mart:** An order-level SQL view provides reusable commercial measures.
+7. **Data Quality:** SQL checks reconcile business metrics and validate analytical structure.
+8. **Pipeline Orchestration:** Python coordinates read-only SQL exports and visualizations.
+9. **BI Export:** Validated datasets are generated for downstream reporting.
+10. **Quality Assurance:** Pytest and Ruff support code reliability.
 
-### Implemented Database Tables
+### 3.2 Implemented Database Tables
 
 | Table | Description | Records |
 |---|---|---:|
@@ -74,7 +84,7 @@ The project follows a modular workflow:
 | `product_categories` | Category translations | 71 |
 | `reviews` | Customer review records | 99,224 |
 
-### Referential Integrity
+### 3.3 Referential Integrity
 
 The relational model includes:
 
@@ -88,6 +98,81 @@ The `reviews` table uses an internal primary key because source `review_id` valu
 Product category translations are joined using the original category names. Missing translations are preserved rather than discarded.
 
 For retention and segmentation analyses, `customer_unique_id` identifies distinct buyers across multiple order-specific customer records.
+
+### 3.4 Analytics Data Mart
+
+The project includes the PostgreSQL view:
+
+`analytics_order_summary`
+
+The view combines delivered orders, customer attributes, and aggregated order-item metrics.
+
+**Grain:** One row per delivered order.
+
+**Included Dimensions and Metrics**
+
+- Order identifier
+- Unique buyer identifier
+- Customer state and city
+- Order status
+- Purchase timestamp and purchase month
+- Actual and estimated delivery timestamps
+- Number of order items
+- Delivered-order item value
+- Freight value
+- Basic late-delivery indicator
+
+Order items are aggregated before joining them to the order-level dataset.
+
+This avoids duplicating orders when a transaction contains multiple products.
+
+**Data Mart Reconciliation**
+
+| Metric | Result |
+|---|---:|
+| Delivered orders | 96,478 |
+| Delivered order items | 110,197 |
+| Delivered-order item value | R$ 13,221,498.11 |
+| Unique buyers | 93,358 |
+| Geographic units | 27 |
+
+The view uses delivered orders with nonmissing purchase timestamps.
+
+Its monetary item-value measure excludes freight and does not represent collected payments, net revenue, or profit.
+
+The basic late-delivery flag does not replace the stricter delivery eligibility rules used in the dedicated delivery-performance analysis.
+
+### 3.5 Automated Analytical Pipeline
+
+The Python orchestrator is implemented in:
+
+`src/run_pipeline.py`
+
+It coordinates:
+
+1. PostgreSQL connectivity and required-file checks.
+2. Execution of the BI data mart quality gate.
+3. Customer cohort CSV export and heatmap generation.
+4. Customer RFM CSV export and visualization.
+5. Monthly BI sales CSV export.
+
+**Current Automated Exports**
+
+| Dataset | Output |
+|---|---|
+| Monthly customer cohorts | `data/processed/customer_cohorts.csv` |
+| RFM customer segments | `data/processed/customer_rfm_segments.csv` |
+| Monthly BI sales | `data/processed/bi_monthly_sales.csv` |
+
+The pipeline uses read-only PostgreSQL connections and atomic CSV replacement.
+
+Each CSV is written to a temporary file before replacing its final destination.
+
+If an individual export fails before replacement, the existing CSV is preserved.
+
+If the BI quality gate fails, the pipeline stops before starting analytical exports.
+
+Atomic replacement applies to individual CSV files, not to the entire multi-step pipeline.
 
 ## 4. Business Analysis
 
@@ -502,6 +587,48 @@ Consequently, the segment labels should be interpreted using their exact SQL def
 
 This model is descriptive and does not independently estimate churn probability, customer lifetime value, or future purchasing behavior.
 
+### 4.9 BI-Ready Monthly Sales Dataset
+
+A monthly sales dataset is generated from `analytics_order_summary` using:
+
+`sql/17_bi_monthly_sales.sql`
+
+**Grain:** One row per purchase month.
+
+The dataset contains 20 months, from January 2017 through August 2018.
+
+It provides:
+
+- Purchase month
+- Delivered-order count
+- Monthly unique buyers
+- Delivered-order item count
+- Delivered-order item value
+- Average item value per delivered order
+- Freight value
+
+The exported dataset is saved to:
+
+`data/processed/bi_monthly_sales.csv`
+
+**Selected Results**
+
+| Month | Delivered Orders | Item Value |
+|---|---:|---:|
+| January 2017 | 750 | R$ 111,798.36 |
+| October 2017 | 4,478 | R$ 648,247.65 |
+| November 2017 | 7,289 | R$ 987,765.37 |
+| December 2017 | 5,513 | R$ 726,033.19 |
+| August 2018 | 6,351 | R$ 838,576.64 |
+
+November 2017 remains the highest-value month in the analyzed period.
+
+The monthly dataset is designed for downstream BI reporting and historical trend analysis.
+
+Monthly unique-buyer counts are not additive across months because a buyer may appear in more than one reporting month.
+
+The 20-month BI dataset does not include all historical activity from 2016, so its sums should not automatically be equated with the full-period totals.
+
 ## 5. Data Quality Findings
 
 Data quality is treated as a core component of the project rather than an optional cleanup step.
@@ -645,7 +772,91 @@ These tests cover successful reconciliation and rejection of invalid customer to
 
 They do not yet independently test PostgreSQL segment assignment rules against synthetic order-level database fixtures.
 
-### 5.7 Analytical Reconciliation
+### 5.7 Analytics Data Mart Quality Checks
+
+The order-level analytics view is validated through:
+
+`sql/16_validate_analytics_order_summary.sql`
+
+Nine SQL checks cover:
+
+1. Unique order grain.
+2. Required fields.
+3. Item count and monetary validity.
+4. Purchase-month consistency.
+5. Delivered-order count.
+6. Delivered-item count.
+7. Delivered-item monetary value.
+8. Distinct buyer count.
+9. Geographic coverage.
+
+**Data Mart Validation Results**
+
+| Metric | Expected | Actual | Status |
+|---|---:|---:|---|
+| Delivered orders | 96,478 | 96,478 | Passed |
+| Delivered items | 110,197 | 110,197 | Passed |
+| Delivered item value | R$ 13,221,498.11 | R$ 13,221,498.11 | Passed |
+| Unique buyers | 93,358 | 93,358 | Passed |
+| Geographic units | 27 | 27 | Passed |
+
+All nine validation checks passed against the current local PostgreSQL dataset.
+
+### 5.8 Automated BI Quality Gate
+
+The SQL file:
+
+`sql/18_bi_quality_gate.sql`
+
+consolidates the nine data mart quality checks into a single result containing:
+
+- `total_checks`
+- `passed_checks`
+- `failed_checks`
+- `quality_status`
+
+**Observed Quality Gate Result**
+
+| Total Checks | Passed | Failed | Status |
+|---|---:|---:|---|
+| 9 | 9 | 0 | PASSED |
+
+The Python orchestrator evaluates the result before starting the analytical export steps.
+
+If the number of checks is unexpected or any check fails, the pipeline raises an error and does not begin generating new exports.
+
+The quality gate currently validates the existing order-level data mart, not every downstream dataset independently.
+
+It also uses expected metrics specific to the historical Olist dataset.
+
+### 5.9 Automated Testing
+
+The project currently has **63 passing automated tests**.
+
+The test suite covers:
+
+- Selected data quality rules.
+- Source-file validation.
+- Product relationship handling.
+- Delivery date logic.
+- Geographic KPI reconciliation.
+- Customer cohort calculations and matrix behavior.
+- RFM segment-level validation.
+- Pipeline configuration and control flow.
+- PostgreSQL connection configuration.
+- Quality gate acceptance and rejection.
+- Pipeline failure propagation.
+- Atomic CSV export behavior.
+
+The atomic export tests simulate successful exports, interrupted exports, empty exports, and protection of previously generated files.
+
+The quality gate tests verify that an invalid result prevents downstream exports and visualizations.
+
+These tests use mocks and synthetic fixtures for much of the pipeline behavior.
+
+They do not provide a complete isolated end-to-end reconstruction of the database from the original CSV files.
+
+### 5.10 Analytical Reconciliation
 
 Joining delivered order items with the product catalog preserved the overall delivered-order item value:
 
@@ -660,6 +871,7 @@ Additional reconciliation confirmed:
 - 96,478 delivered orders linked to 93,358 unique buyers in the repeat purchase analysis.
 - 93,358 unique buyers assigned to seven RFM segments.
 - R$ 13,221,498.11 reconciled across the RFM segments.
+- 96,478 delivered orders represented in `analytics_order_summary`.
 
 These populations intentionally differ because each analysis applies its own business rules.
 
@@ -696,14 +908,20 @@ ecommerce-intelligence/
 │   ├── 11_geographic_performance.sql
 │   ├── 12_customer_retention.sql
 │   ├── 13_customer_cohorts.sql
-│   └── 14_customer_rfm.sql
+│   ├── 14_customer_rfm.sql
+│   ├── 15_create_analytics_order_summary.sql
+│   ├── 16_validate_analytics_order_summary.sql
+│   ├── 17_bi_monthly_sales.sql
+│   └── 18_bi_quality_gate.sql
 ├── src/
+│   ├── __init__.py
 │   ├── business_rules.py
 │   ├── explore_data.py
 │   ├── investigate_anomalies.py
 │   ├── load_data.py
 │   ├── load_products.py
 │   ├── load_reviews.py
+│   ├── run_pipeline.py
 │   ├── validate_data.py
 │   ├── visualize_sales.py
 │   ├── visualize_categories.py
@@ -719,12 +937,16 @@ ecommerce-intelligence/
 │   ├── test_delivery_rules.py
 │   ├── test_geographic_performance.py
 │   ├── test_load_data.py
-│   └── test_load_products.py
+│   ├── test_load_products.py
+│   ├── test_pipeline.py
+│   └── test_pipeline_atomic.py
 ├── README.md
 └── requirements.txt
 ```
 
 Raw datasets and intermediate analytical CSV files are excluded from version control.
+
+The PostgreSQL view is recreated from its SQL definition when setting up a database; it is not represented as a standalone data file in the repository.
 
 ## 7. Reproducing the Project
 
@@ -734,6 +956,7 @@ Raw datasets and intermediate analytical CSV files are excluded from version con
 - PostgreSQL
 - Access to the original Olist dataset
 - A configured PostgreSQL database and application user
+- Permissions to create the project tables and analytics view
 
 The current scripts use the following local configuration:
 
@@ -742,8 +965,11 @@ The current scripts use the following local configuration:
 | Database | `ecommerce_db` |
 | User | `ecommerce_user` |
 | Host | `localhost` |
+| Port | `5432` |
 
-Database passwords are requested interactively and are not stored in source files.
+The analytical orchestrator supports environment-based connection settings.
+
+Database passwords are not stored in project source files.
 
 ### 7.1 Obtain the Dataset
 
@@ -772,14 +998,16 @@ pip install -r requirements.txt
 After creating the PostgreSQL database and application user with the necessary permissions:
 
 ```bash
-psql -h localhost -U ecommerce_user -d ecommerce_db \
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
   -f sql/01_create_tables.sql
 ```
 
 ### 7.4 Create and Load Product Tables
 
 ```bash
-psql -h localhost -U ecommerce_user -d ecommerce_db \
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
   -f sql/04_create_product_tables.sql
 ```
 
@@ -800,7 +1028,8 @@ The loader checks source files and compares expected row counts with the databas
 ### 7.6 Apply the Product Relationship Migration
 
 ```bash
-psql -h localhost -U ecommerce_user -d ecommerce_db \
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
   -f sql/05_add_product_relationship.sql
 ```
 
@@ -809,7 +1038,8 @@ This adds the foreign key between order items and products after both datasets a
 ### 7.7 Create and Load Reviews
 
 ```bash
-psql -h localhost -U ecommerce_user -d ecommerce_db \
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
   -f sql/09_create_reviews_table.sql
 ```
 
@@ -821,41 +1051,193 @@ This preserves original review records while using an internal database primary 
 
 **Important:** The setup order above describes the intended workflow. Full reconstruction from an empty database has not yet been verified by an isolated end-to-end integration test.
 
-### 7.8 Run SQL Analyses
+### 7.8 Create the Analytics Data Mart
+
+After successfully loading the required tables, create the order-level analytics view:
 
 ```bash
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/02_business_kpis.sql
-
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/03_monthly_sales.sql
-
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/06_category_performance.sql
-
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/07_delivery_performance.sql
-
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/08_monthly_delivery_performance.sql
-
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/10_delivery_vs_reviews.sql
-
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/11_geographic_performance.sql
-
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/12_customer_retention.sql
-
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/13_customer_cohorts.sql
-
-psql -h localhost -U ecommerce_user -d ecommerce_db \
-  -f sql/14_customer_rfm.sql
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/15_create_analytics_order_summary.sql
 ```
 
-### 7.9 Generate Visualizations
+The command creates or replaces `analytics_order_summary`.
+
+It does not recreate or reload the source tables.
+
+The project pipeline requires this view to exist before it can execute the BI quality gate.
+
+### 7.9 Validate the Data Mart
+
+Run the detailed SQL quality checks:
+
+```bash
+psql -X -P pager=off -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/16_validate_analytics_order_summary.sql
+```
+
+Expected result: nine rows with status `PASSED`.
+
+Run the consolidated quality gate:
+
+```bash
+psql -X -P pager=off -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/18_bi_quality_gate.sql
+```
+
+Expected result:
+
+```text
+total_checks | passed_checks | failed_checks | quality_status
+-------------+---------------+---------------+---------------
+9            | 9             | 0             | PASSED
+```
+
+These expected values apply to the original historical Olist dataset used in this project.
+
+### 7.10 Run SQL Analyses
+
+The individual business analyses can be executed directly through PostgreSQL:
+
+```bash
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/02_business_kpis.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/03_monthly_sales.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/06_category_performance.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/07_delivery_performance.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/08_monthly_delivery_performance.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/10_delivery_vs_reviews.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/11_geographic_performance.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/12_customer_retention.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/13_customer_cohorts.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/14_customer_rfm.sql
+
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/17_bi_monthly_sales.sql
+```
+
+The monthly BI query depends on the previously created `analytics_order_summary` view.
+
+### 7.11 Configure Pipeline Authentication
+
+The orchestrator accepts these environment variables:
+
+| Environment Variable | Purpose |
+|---|---|
+| `ECOMMERCE_DB_HOST` | PostgreSQL host |
+| `ECOMMERCE_DB_PORT` | PostgreSQL port |
+| `ECOMMERCE_DB_NAME` | Database name |
+| `ECOMMERCE_DB_USER` | Database username |
+| `ECOMMERCE_DB_PASSWORD` | Database password |
+
+Host, port, database, and username have local defaults.
+
+A PostgreSQL password can be supplied temporarily for the current terminal session without storing it in project files.
+
+On a Bash-compatible terminal:
+
+```bash
+read -rs -p "PostgreSQL password: " ECOMMERCE_DB_PASSWORD
+echo
+export ECOMMERCE_DB_PASSWORD
+```
+
+The password is entered without echoing its characters.
+
+After finishing the session, the variable can be removed:
+
+```bash
+unset ECOMMERCE_DB_PASSWORD
+```
+
+For future local development, PostgreSQL's standard password-file mechanism can provide another option, provided it is configured with appropriately restricted permissions outside the repository.
+
+Never commit credentials, `.pgpass` files, or environment files containing secrets to Git.
+
+### 7.12 Run the Automated Analytics Pipeline
+
+Check required files and PostgreSQL connectivity:
+
+```bash
+python src/run_pipeline.py --check
+```
+
+The `--check` mode verifies configuration and database connectivity. It does not execute the full BI quality gate or generate analytical outputs.
+
+Run the complete pipeline:
+
+```bash
+python src/run_pipeline.py
+```
+
+**Execution Order**
+
+1. Validate required files.
+2. Connect to PostgreSQL using a read-only configuration.
+3. Execute the BI data mart quality gate.
+4. Export customer cohort results.
+5. Generate the cohort retention heatmap.
+6. Export RFM segment results.
+7. Generate the RFM segmentation visualization.
+8. Export the BI monthly sales dataset.
+9. Report successful completion.
+
+Expected quality-gate output includes:
+
+```text
+BI data mart quality gate: PASSED (9/9)
+```
+
+A successful run ends with:
+
+```text
+Pipeline completed successfully
+```
+
+**Generated CSV Files**
+
+```text
+data/processed/customer_cohorts.csv
+data/processed/customer_rfm_segments.csv
+data/processed/bi_monthly_sales.csv
+```
+
+The monthly BI CSV contains 20 data rows plus a header.
+
+### 7.13 Generate Visualizations Individually
+
+The existing visualizations can also be generated separately.
 
 ```bash
 python src/visualize_sales.py
@@ -865,7 +1247,11 @@ python src/visualize_satisfaction.py
 python src/visualize_geography.py
 ```
 
-The cohort heatmap requires a local CSV export from its SQL query:
+For the cohort and RFM visualizations, the required CSV files must already exist.
+
+They can be generated automatically through `src/run_pipeline.py`.
+
+Alternatively, run the corresponding SQL exports manually:
 
 ```bash
 psql -X -v ON_ERROR_STOP=1 \
@@ -876,8 +1262,6 @@ psql -X -v ON_ERROR_STOP=1 \
 
 python src/visualize_cohorts.py
 ```
-
-The RFM segmentation visualization also requires a local CSV export:
 
 ```bash
 psql -X -v ON_ERROR_STOP=1 \
@@ -891,9 +1275,11 @@ python src/visualize_rfm.py
 
 Generated charts are saved under `reports/figures/`.
 
-The intermediate cohort and RFM CSV files are not committed to the repository.
+Intermediate analytical CSV files are not committed to the repository.
 
-### 7.10 Run Quality Checks
+### 7.14 Run Automated Tests and Code Checks
+
+From the project root:
 
 ```bash
 ruff check src/ tests/
@@ -901,17 +1287,15 @@ ruff format --check src/ tests/
 python -m pytest tests/ -v
 ```
 
-**Current automated test status: 39 passing tests.**
+**Current automated test status: 63 passing tests.**
 
-The test suite covers selected data quality rules, source validation functions, delivery date logic, geographic KPI validation, monthly cohort matrix behavior, and RFM segment-level reconciliation.
+The suite includes unit tests for customer cohorts, RFM reconciliation, delivery rules, geographic metrics, data loading functions, pipeline orchestration, quality-gate behavior, and atomic CSV exports.
 
-Cohort tests use synthetic data to check valid retention percentages, zero-activity periods, unobservable months, invalid future activity, and incomplete initial cohorts.
-
-RFM tests use synthetic segment-level data to verify expected customer totals, monetary reconciliation, duplicate segment detection, invalid percentages, invalid counts, and missing segments.
-
-These tests do not yet provide complete end-to-end database integration coverage.
+Mock-based tests do not replace comprehensive integration testing against an isolated PostgreSQL instance.
 
 ## 8. Known Limitations
+
+### Dataset and Analytical Limitations
 
 - The dataset represents historical Brazilian e-commerce transactions, not current market conditions.
 - Item-value metrics exclude freight and do not represent collected payments, net revenue, or profit.
@@ -932,12 +1316,31 @@ These tests do not yet provide complete end-to-end database integration coverage
 - RFM thresholds are exploratory and have not been statistically optimized or independently validated against campaign outcomes.
 - Segment assignment follows ordered business rules; the priority of these rules affects segment membership.
 - The RFM reference date is fixed at September 1, 2018.
-- Cohort and RFM visualizations currently rely on manually generated intermediate CSV files.
+
+### Data Mart and Pipeline Limitations
+
+- The order-level data mart currently covers delivered orders with nonmissing purchase timestamps.
+- The data mart's basic late-delivery flag does not implement every validity rule used in the dedicated delivery analysis.
+- The BI monthly sales dataset covers January 2017 through August 2018 rather than the entire historical period.
+- Distinct monthly buyer counts must not be added together to calculate unique buyers across multiple months.
+- The BI quality gate currently checks the order-level data mart, not the contents of every downstream CSV.
+- The quality gate relies on expected metrics specific to the historical Olist dataset.
+- The analytical pipeline assumes an already populated PostgreSQL database and an existing data mart view.
+- The pipeline automates cohort, RFM, and monthly BI exports but does not yet orchestrate every original analytical report.
+- Atomic file replacement protects individual CSV outputs; the full set of outputs is not committed atomically as one batch.
+- The local pipeline does not currently include a scheduler, retry policy, incremental ingestion, or cloud deployment.
+- The initial database setup is designed for a local PostgreSQL environment.
+- An isolated, fully automated end-to-end pipeline reconstruction remains a planned improvement.
 - Some validation rules use known Olist record counts and monetary totals, limiting immediate reuse with other datasets.
 - Existing-data checks in the loaders rely primarily on record counts rather than full content reconciliation.
 - The `--reload` option in `src/load_data.py` has not been updated and integration-tested for the additional `reviews` foreign-key dependency. It must not be used on the current database until this is resolved.
-- The initial database setup is designed for a local PostgreSQL environment.
-- An isolated, fully automated end-to-end pipeline reconstruction remains a planned improvement.
+- The automated tests cover important behavior but do not yet establish complete database-backed integration coverage.
+
+### BI Limitations
+
+- The project currently produces BI-ready data exports but does not yet include a completed interactive Power BI dashboard.
+- Power BI service capabilities and available report-authoring workflows depend on the user's environment, workspace, licensing, and available features.
+- A complete dashboard integration and validation workflow remains to be implemented.
 
 ## 9. Future Development
 
@@ -945,22 +1348,25 @@ Planned improvements include:
 
 ### Data Analytics
 
-- Customer lifetime value estimates with explicit methodological limitations
-- A consolidated executive dashboard
-- Additional operational and business recommendations
-- Sensitivity analysis for alternative RFM thresholds
-- Further analysis of repeat purchasing and high-value customer groups
+- A consolidated executive dashboard using supported BI tools.
+- Customer lifetime value estimates with explicit methodological limitations.
+- Additional operational and business recommendations.
+- Sensitivity analysis for alternative RFM thresholds.
+- Further analysis of repeat purchasing and high-value customer groups.
+- Cross-analysis of regional sales, product composition, and delivery performance.
 
 ### Data Engineering
 
-- Full pipeline orchestration
-- Automated database reconstruction
-- Integration tests for ingestion and referential integrity
-- Database-backed tests for RFM segment assignment rules
-- Safer database reload workflows
-- Improved content-level reconciliation and incremental loading
-- Configuration management for multiple environments
-- Automated analytical exports and visualization generation
+- Full pipeline orchestration, including ingestion and database initialization.
+- Automated database reconstruction and isolated integration tests.
+- Database-backed tests for RFM segment assignment rules.
+- Safer database reload workflows.
+- Improved content-level reconciliation and incremental loading.
+- Configuration management for multiple environments.
+- Automated quality checks for downstream BI exports.
+- More comprehensive pipeline execution logging and monitoring.
+- Scheduling, retry policies, and deployment preparation.
+- A more complete BI-oriented analytical model.
 
 ## 10. Dataset Attribution
 
