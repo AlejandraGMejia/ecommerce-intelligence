@@ -7,7 +7,7 @@ An end-to-end e-commerce analytics project based on the Brazilian E-Commerce Pub
 
 This project transforms historical transactional data into business insights using Python, PostgreSQL, SQL, data quality validation, automated testing, and executive visualizations.
 
-**Project Status:** In Development
+**Project Status:** In Development — Six Analytical Modules Implemented
 
 ## 1. Project Overview
 
@@ -20,6 +20,7 @@ The project combines:
 - PostgreSQL relational modeling
 - SQL business analysis
 - Executive data visualization
+- Customer retention and segmentation
 - Automated testing
 - Business insight communication
 
@@ -31,8 +32,9 @@ The project combines:
 4. Are late deliveries associated with lower customer satisfaction?
 5. Which geographic regions generate the most business activity?
 6. How do customer retention and purchasing patterns evolve?
+7. Which customers contribute the most monetary value, and how can their purchasing behavior be segmented?
 
-All six questions have been investigated through the existing analytical modules. Customer segmentation and additional business analyses are planned.
+All seven questions have been investigated through six analytical modules. Pipeline integration, automation, and executive dashboard development remain planned.
 
 ## 2. Technology Stack
 
@@ -85,7 +87,7 @@ The `reviews` table uses an internal primary key because source `review_id` valu
 
 Product category translations are joined using the original category names. Missing translations are preserved rather than discarded.
 
-For customer retention, `customer_unique_id` is used to identify distinct buyers across multiple order-specific customer records.
+For retention and segmentation analyses, `customer_unique_id` identifies distinct buyers across multiple order-specific customer records.
 
 ## 4. Business Analysis
 
@@ -372,6 +374,134 @@ The cohort definition is based on the first delivered order's purchase timestamp
 
 The analysis does not establish whether customers permanently churned or purchased again outside the available historical dataset.
 
+### 4.8 Customer Segmentation and RFM Analysis
+
+The RFM analysis segments customers according to three dimensions:
+
+- **Recency:** Number of days since the purchase date of the most recent delivered order.
+- **Frequency:** Number of delivered orders placed by the buyer.
+- **Monetary:** Total value of purchased items across delivered orders, excluding freight.
+
+Each customer is identified using `customer_unique_id`.
+
+To prevent multiple products within one order from inflating purchase frequency, item values are aggregated at the order level before calculating customer-level metrics.
+
+#### Reference Date
+
+**September 1, 2018**
+
+The historical reference date was selected immediately after the latest observed purchase month among delivered orders.
+
+The observed delivered-order purchase dates range from September 15, 2016, to August 29, 2018.
+
+Recency is calculated relative to this fixed reference date rather than the current date.
+
+This makes the analysis reproducible and avoids assigning misleading inactivity periods to historical transactions.
+
+#### Scoring Methodology
+
+RFM scores use three descriptive levels.
+
+**Recency Score**
+
+| Score | Rule |
+|---|---|
+| 3 | Last purchase within 90 days |
+| 2 | Last purchase between 91 and 180 days |
+| 1 | Last purchase more than 180 days ago |
+
+**Frequency Score**
+
+| Score | Rule |
+|---|---|
+| 3 | Three or more delivered orders |
+| 2 | Two delivered orders |
+| 1 | One delivered order |
+
+**Monetary Score**
+
+| Score | Rule |
+|---|---|
+| 3 | Item value of at least R$ 300 |
+| 2 | Item value from R$ 150 to less than R$ 300 |
+| 1 | Item value below R$ 150 |
+
+The frequency scoring is adapted to the dataset because approximately 97% of buyers placed only one delivered order.
+
+Conventional frequency quintiles would create extensive ties and offer limited differentiation.
+
+The recency and monetary thresholds are exploratory business rules rather than statistically optimized cutoffs.
+
+#### Customer Segments
+
+Seven mutually exclusive customer segments are assigned using ordered business rules.
+
+| Segment | Description |
+|---|---|
+| Champions | Recent repeat buyers with item value of at least R$ 150 |
+| Loyal Customers | Other repeat buyers whose latest purchase was within 180 days |
+| At-Risk Repeat Buyers | Repeat buyers whose latest purchase was more than 180 days ago |
+| Recent One-Time Buyers | One-time buyers whose purchase was within 90 days |
+| High-Value One-Time Buyers | One-time buyers with purchases older than 90 days and item value of at least R$ 300 |
+| Developing One-Time Buyers | Other one-time buyers whose purchase was between 91 and 180 days ago |
+| Inactive One-Time Buyers | Remaining one-time buyers with more than 180 days since purchase |
+
+The segment names describe observed historical behavior. They do not constitute churn predictions, profitability measures, or evidence of future loyalty.
+
+#### RFM Segmentation Results
+
+The analysis classified **93,358 unique buyers** and reconciled **R$ 13,221,498.11** in delivered-order item value.
+
+![Customer Segmentation: RFM Analysis](reports/figures/customer_rfm_segmentation.png)
+
+**Segment-Level Results**
+
+| Segment | Buyers | Buyer Share | Total Item Value |
+|---|---:|---:|---:|
+| Inactive One-Time Buyers | 49,839 | 53.38% | R$ 4,672,548.46 |
+| High-Value One-Time Buyers | 5,970 | 6.39% | R$ 3,758,828.66 |
+| Recent One-Time Buyers | 17,469 | 18.71% | R$ 2,401,887.46 |
+| Developing One-Time Buyers | 17,279 | 18.51% | R$ 1,659,824.78 |
+| At-Risk Repeat Buyers | 1,587 | 1.70% | R$ 400,590.59 |
+| Loyal Customers | 834 | 0.89% | R$ 187,221.30 |
+| Champions | 380 | 0.41% | R$ 140,596.86 |
+| **Total** | **93,358** | **100% (before rounding)** | **R$ 13,221,498.11** |
+
+**Key Findings**
+
+- **53.38%** of buyers belong to the `Inactive One-Time Buyers` segment.
+- `High-Value One-Time Buyers` account for **6.39%** of buyers but approximately **28.43%** of delivered-order item value.
+- The average delivered-order item value associated with each high-value one-time buyer is approximately **R$ 629.62**.
+- Only **380 buyers**, or **0.41%**, meet the exploratory `Champions` criteria.
+- The `Loyal Customers` and `Champions` segments together contain **1,214** relatively recent repeat buyers.
+- The `At-Risk Repeat Buyers` group contains **1,587** repeat buyers whose most recent qualifying purchase occurred more than 180 days before the reference date.
+
+#### Business Interpretation
+
+The high-value one-time segment represents an opportunity for further investigation of repeat purchase behavior.
+
+Potential next analyses include examining the product categories purchased by these buyers, identifying purchasing intervals, and evaluating whether particular types of products encourage repeat transactions.
+
+The large inactive one-time segment may also be relevant to customer reactivation research.
+
+However, historical purchase inactivity alone does not establish that customers have permanently churned.
+
+Marketing recommendations would require additional information about customer contactability, acquisition costs, campaign expenses, margins, product replenishment cycles, and campaign effectiveness.
+
+#### Analytical Considerations
+
+The seven segments are mutually exclusive because they follow an ordered SQL `CASE` statement.
+
+The segment hierarchy gives recent repeat buyers priority over other classifications.
+
+The monetary and recency thresholds are fixed exploratory rules and may require adjustment for other businesses or datasets.
+
+The `High-Value One-Time Buyers` segment excludes purchases from the most recent 90 days because those buyers are assigned to `Recent One-Time Buyers` first.
+
+Consequently, the segment labels should be interpreted using their exact SQL definitions.
+
+This model is descriptive and does not independently estimate churn probability, customer lifetime value, or future purchasing behavior.
+
 ## 5. Data Quality Findings
 
 Data quality is treated as a core component of the project rather than an optional cleanup step.
@@ -478,7 +608,44 @@ The Python validation workflow checks:
 
 These checks support consistent cohort reporting and help prevent misleading visualizations.
 
-### 5.6 Analytical Reconciliation
+### 5.6 Customer Segmentation Data Quality
+
+The RFM analysis aggregates delivered order items at the order level before calculating customer metrics.
+
+This prevents an order containing several products from being counted as several separate purchases.
+
+The analysis also uses a fixed historical reference date.
+
+**RFM Validation Checks**
+
+The Python visualization validates:
+
+- Required segment columns.
+- Missing segment identifiers.
+- Duplicate segment names.
+- Expected segment coverage.
+- Valid numeric KPI values.
+- Positive integer customer counts.
+- Nonnegative segment item values.
+- Customer percentage consistency.
+- Total customer reconciliation.
+- Total monetary value reconciliation.
+
+**RFM Reconciliation Results**
+
+| Metric | Expected | Actual | Status |
+|---|---:|---:|---|
+| Unique buyers | 93,358 | 93,358 | Passed |
+| Delivered item value | R$ 13,221,498.11 | R$ 13,221,498.11 | Passed |
+| Customer segments | 7 | 7 | Passed |
+
+Nine RFM-focused automated tests verify selected validation behavior using synthetic segment-level records derived from known analysis results.
+
+These tests cover successful reconciliation and rejection of invalid customer totals, monetary totals, segment names, and percentages.
+
+They do not yet independently test PostgreSQL segment assignment rules against synthetic order-level database fixtures.
+
+### 5.7 Analytical Reconciliation
 
 Joining delivered order items with the product catalog preserved the overall delivered-order item value:
 
@@ -491,6 +658,8 @@ Additional reconciliation confirmed:
 - 95,801 valid delivered orders with at least one review in the satisfaction analysis.
 - 96,478 delivered orders in the geographic sales analysis.
 - 96,478 delivered orders linked to 93,358 unique buyers in the repeat purchase analysis.
+- 93,358 unique buyers assigned to seven RFM segments.
+- R$ 13,221,498.11 reconciled across the RFM segments.
 
 These populations intentionally differ because each analysis applies its own business rules.
 
@@ -511,7 +680,8 @@ ecommerce-intelligence/
 │       ├── monthly_delivery_performance.png
 │       ├── delivery_vs_satisfaction.png
 │       ├── geographic_performance.png
-│       └── customer_cohort_retention.png
+│       ├── customer_cohort_retention.png
+│       └── customer_rfm_segmentation.png
 ├── sql/
 │   ├── 01_create_tables.sql
 │   ├── 02_business_kpis.sql
@@ -525,7 +695,8 @@ ecommerce-intelligence/
 │   ├── 10_delivery_vs_reviews.sql
 │   ├── 11_geographic_performance.sql
 │   ├── 12_customer_retention.sql
-│   └── 13_customer_cohorts.sql
+│   ├── 13_customer_cohorts.sql
+│   └── 14_customer_rfm.sql
 ├── src/
 │   ├── business_rules.py
 │   ├── explore_data.py
@@ -539,9 +710,11 @@ ecommerce-intelligence/
 │   ├── visualize_delivery.py
 │   ├── visualize_satisfaction.py
 │   ├── visualize_geography.py
-│   └── visualize_cohorts.py
+│   ├── visualize_cohorts.py
+│   └── visualize_rfm.py
 ├── tests/
 │   ├── test_customer_cohorts.py
+│   ├── test_customer_rfm.py
 │   ├── test_data_quality.py
 │   ├── test_delivery_rules.py
 │   ├── test_geographic_performance.py
@@ -677,6 +850,9 @@ psql -h localhost -U ecommerce_user -d ecommerce_db \
 
 psql -h localhost -U ecommerce_user -d ecommerce_db \
   -f sql/13_customer_cohorts.sql
+
+psql -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/14_customer_rfm.sql
 ```
 
 ### 7.9 Generate Visualizations
@@ -689,7 +865,7 @@ python src/visualize_satisfaction.py
 python src/visualize_geography.py
 ```
 
-The cohort heatmap additionally requires a local CSV export from its SQL query:
+The cohort heatmap requires a local CSV export from its SQL query:
 
 ```bash
 psql -X -v ON_ERROR_STOP=1 \
@@ -701,9 +877,21 @@ psql -X -v ON_ERROR_STOP=1 \
 python src/visualize_cohorts.py
 ```
 
+The RFM segmentation visualization also requires a local CSV export:
+
+```bash
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  --csv \
+  -f sql/14_customer_rfm.sql \
+  -o data/processed/customer_rfm_segments.csv
+
+python src/visualize_rfm.py
+```
+
 Generated charts are saved under `reports/figures/`.
 
-The intermediate cohort CSV is not committed to the repository.
+The intermediate cohort and RFM CSV files are not committed to the repository.
 
 ### 7.10 Run Quality Checks
 
@@ -713,11 +901,13 @@ ruff format --check src/ tests/
 python -m pytest tests/ -v
 ```
 
-**Current automated test status: 30 passing tests.**
+**Current automated test status: 39 passing tests.**
 
-The test suite covers selected data quality rules, source validation functions, delivery date logic, geographic KPI validation, and monthly cohort matrix behavior.
+The test suite covers selected data quality rules, source validation functions, delivery date logic, geographic KPI validation, monthly cohort matrix behavior, and RFM segment-level reconciliation.
 
 Cohort tests use synthetic data to check valid retention percentages, zero-activity periods, unobservable months, invalid future activity, and incomplete initial cohorts.
+
+RFM tests use synthetic segment-level data to verify expected customer totals, monetary reconciliation, duplicate segment detection, invalid percentages, invalid counts, and missing segments.
 
 These tests do not yet provide complete end-to-end database integration coverage.
 
@@ -737,7 +927,12 @@ These tests do not yet provide complete end-to-end database integration coverage
 - The finite observation window creates unequal follow-up opportunities for early and recent customer cohorts.
 - Cohorts are based on the purchase dates of orders ultimately marked as delivered.
 - The customer analysis does not establish permanent churn or predict future retention.
-- Cohort analysis currently relies on a manually generated intermediate CSV and a fixed reporting window.
+- RFM segmentation describes historical purchasing behavior and does not predict churn, loyalty, or profitability.
+- RFM monetary values represent delivered-order item prices, not net revenue or customer lifetime value.
+- RFM thresholds are exploratory and have not been statistically optimized or independently validated against campaign outcomes.
+- Segment assignment follows ordered business rules; the priority of these rules affects segment membership.
+- The RFM reference date is fixed at September 1, 2018.
+- Cohort and RFM visualizations currently rely on manually generated intermediate CSV files.
 - Some validation rules use known Olist record counts and monetary totals, limiting immediate reuse with other datasets.
 - Existing-data checks in the loaders rely primarily on record counts rather than full content reconciliation.
 - The `--reload` option in `src/load_data.py` has not been updated and integration-tested for the additional `reviews` foreign-key dependency. It must not be used on the current database until this is resolved.
@@ -750,19 +945,22 @@ Planned improvements include:
 
 ### Data Analytics
 
-- Customer segmentation and RFM analysis
 - Customer lifetime value estimates with explicit methodological limitations
 - A consolidated executive dashboard
 - Additional operational and business recommendations
+- Sensitivity analysis for alternative RFM thresholds
+- Further analysis of repeat purchasing and high-value customer groups
 
 ### Data Engineering
 
 - Full pipeline orchestration
 - Automated database reconstruction
 - Integration tests for ingestion and referential integrity
+- Database-backed tests for RFM segment assignment rules
 - Safer database reload workflows
 - Improved content-level reconciliation and incremental loading
 - Configuration management for multiple environments
+- Automated analytical exports and visualization generation
 
 ## 10. Dataset Attribution
 
