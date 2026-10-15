@@ -1,11 +1,11 @@
-"""Run analytical SQL exports and Python visualizations.
+"""Run validated e-commerce analytics exports and visualizations.
 
 Features:
-- Read-only PostgreSQL access.
+- Read-only PostgreSQL connections.
+- BI data mart quality gate.
 - Atomic CSV exports.
 - Sequential analytical execution.
 - Failure propagation.
-- Connection health checks.
 - Environment-based database configuration.
 
 Usage:
@@ -26,6 +26,10 @@ import psycopg
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 
+QUALITY_GATE_PATH = PROJECT_ROOT / "sql" / "18_bi_quality_gate.sql"
+
+EXPECTED_QUALITY_CHECKS = 9
+
 ANALYSES = (
     {
         "name": "Customer Cohorts",
@@ -41,6 +45,14 @@ ANALYSES = (
     },
 )
 
+BI_EXPORTS = (
+    {
+        "name": "BI Monthly Sales",
+        "sql": PROJECT_ROOT / "sql" / "17_bi_monthly_sales.sql",
+        "csv": PROCESSED_DIR / "bi_monthly_sales.csv",
+    },
+)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -51,14 +63,19 @@ logger = logging.getLogger(__name__)
 
 
 def validate_configuration() -> None:
-    """Validate that required analysis files are available."""
+    """Check the files required by the analytical pipeline."""
+
+    required_files = [QUALITY_GATE_PATH]
 
     for analysis in ANALYSES:
-        for key in ("sql", "script"):
-            path = analysis[key]
+        required_files.extend([analysis["sql"], analysis["script"]])
 
-            if not path.is_file():
-                raise FileNotFoundError(f"Required file not found: {path}")
+    for export in BI_EXPORTS:
+        required_files.append(export["sql"])
+
+    for path in required_files:
+        if not path.is_file():
+            raise FileNotFoundError(f"Required file not found: {path}")
 
     PROCESSED_DIR.mkdir(
         parents=True,
@@ -67,7 +84,7 @@ def validate_configuration() -> None:
 
 
 def get_database_connection() -> psycopg.Connection:
-    """Create a connection using local environment configuration."""
+    """Connect using environment-based local configuration."""
 
     connection_kwargs = {
         "host": os.getenv("ECOMMERCE_DB_HOST", "localhost"),
@@ -88,7 +105,7 @@ def get_database_connection() -> psycopg.Connection:
 
 
 def validate_database_connection() -> None:
-    """Check PostgreSQL connectivity without modifying records."""
+    """Check connectivity without modifying database records."""
 
     logger.info("Checking PostgreSQL connection...")
 
@@ -105,17 +122,68 @@ def validate_database_connection() -> None:
     logger.info("PostgreSQL connection: PASSED")
 
 
-def export_query(
-    connection: psycopg.Connection,
-    sql_path: Path,
-    output_path: Path,
-) -> None:
-    """Export SQL results atomically without corrupting prior CSVs."""
+def read_sql(sql_path: Path) -> str:
+    """Read a nonempty SQL query."""
 
     sql = sql_path.read_text(encoding="utf-8").strip()
 
     if not sql:
         raise ValueError(f"Empty SQL file: {sql_path}")
+
+    return sql.rstrip(";").strip()
+
+
+def validate_quality_gate(
+    connection: psycopg.Connection,
+) -> None:
+    """Stop the pipeline when BI data mart checks do not pass."""
+
+    logger.info("Running BI data mart quality gate...")
+
+    sql = read_sql(QUALITY_GATE_PATH)
+
+    with (
+        connection.transaction(),
+        connection.cursor() as cursor,
+    ):
+        cursor.execute("SET TRANSACTION READ ONLY")
+        cursor.execute(sql)
+        result = cursor.fetchone()
+
+    if result is None or len(result) != 4:
+        raise RuntimeError("Quality gate returned an unexpected result.")
+
+    total_checks, passed_checks, failed_checks, status = result
+
+    if (
+        total_checks != EXPECTED_QUALITY_CHECKS
+        or passed_checks != EXPECTED_QUALITY_CHECKS
+        or failed_checks != 0
+        or status != "PASSED"
+    ):
+        raise RuntimeError(
+            "BI data mart quality gate FAILED: "
+            f"total={total_checks}, "
+            f"passed={passed_checks}, "
+            f"failed={failed_checks}, "
+            f"status={status}"
+        )
+
+    logger.info(
+        "BI data mart quality gate: PASSED (%s/%s)",
+        passed_checks,
+        total_checks,
+    )
+
+
+def export_query(
+    connection: psycopg.Connection,
+    sql_path: Path,
+    output_path: Path,
+) -> None:
+    """Export query results with atomic CSV replacement."""
+
+    sql = read_sql(sql_path)
 
     output_path.parent.mkdir(
         parents=True,
@@ -140,9 +208,7 @@ def export_query(
             ):
                 cursor.execute("SET TRANSACTION READ ONLY")
 
-                copy_sql = (
-                    f"COPY ({sql.rstrip(';')}) TO STDOUT WITH (FORMAT CSV, HEADER TRUE)"
-                )
+                copy_sql = f"COPY ({sql}) TO STDOUT WITH (FORMAT CSV, HEADER TRUE)"
 
                 with cursor.copy(copy_sql) as copy:
                     for chunk in copy:
@@ -164,7 +230,7 @@ def export_query(
 
 
 def run_visualization(script_path: Path) -> None:
-    """Execute a visualization using the active Python environment."""
+    """Run visualization using the current Python interpreter."""
 
     subprocess.run(
         [sys.executable, str(script_path)],
@@ -174,13 +240,16 @@ def run_visualization(script_path: Path) -> None:
 
 
 def run_pipeline() -> None:
-    """Run all configured analytics in sequence."""
+    """Validate data and execute the configured export workflows."""
 
     logger.info("Starting E-Commerce Intelligence pipeline")
 
     validate_configuration()
 
     with get_database_connection() as connection:
+        # The quality gate runs before any analytical exports.
+        validate_quality_gate(connection)
+
         for analysis in ANALYSES:
             logger.info(
                 "Processing: %s",
@@ -205,22 +274,39 @@ def run_pipeline() -> None:
                 analysis["name"],
             )
 
+        for export in BI_EXPORTS:
+            logger.info(
+                "Processing: %s",
+                export["name"],
+            )
+
+            export_query(
+                connection=connection,
+                sql_path=export["sql"],
+                output_path=export["csv"],
+            )
+
+            logger.info(
+                "BI CSV exported: %s",
+                export["csv"].name,
+            )
+
     logger.info("Pipeline completed successfully")
 
 
 def main() -> int:
-    """Parse CLI arguments and run the requested task."""
+    """Run a connection check or the complete analytical pipeline."""
 
     parser = argparse.ArgumentParser(
-        description=("Run read-only analytical exports and visualizations.")
+        description=("Run validated e-commerce analytical exports and visualizations.")
     )
 
     parser.add_argument(
         "--check",
         action="store_true",
         help=(
-            "Validate required files and PostgreSQL "
-            "connectivity without exporting data."
+            "Validate configuration and PostgreSQL "
+            "connectivity without generating files."
         ),
     )
 

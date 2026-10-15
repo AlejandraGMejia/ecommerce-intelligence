@@ -10,16 +10,38 @@ import pytest
 from src import run_pipeline
 
 
+def create_mock_connection(result=(1,)):
+    """Build a database mock compatible with context managers."""
+
+    connection = MagicMock()
+    cursor = MagicMock()
+
+    connection.__enter__.return_value = connection
+    connection.cursor.return_value.__enter__.return_value = cursor
+    connection.transaction.return_value.__enter__.return_value = None
+
+    cursor.fetchone.return_value = result
+
+    return connection, cursor
+
+
 def test_configuration_files_exist():
-    """All configured SQL queries and scripts must exist."""
+    """All required SQL files and scripts must exist."""
+
+    run_pipeline.validate_configuration()
 
     for analysis in run_pipeline.ANALYSES:
         assert analysis["sql"].is_file()
         assert analysis["script"].is_file()
 
+    for export in run_pipeline.BI_EXPORTS:
+        assert export["sql"].is_file()
+
+    assert run_pipeline.QUALITY_GATE_PATH.is_file()
+
 
 def test_pipeline_has_expected_analyses():
-    """The initial pipeline must contain cohorts and RFM."""
+    """The pipeline must include customer cohorts and RFM."""
 
     names = {analysis["name"] for analysis in run_pipeline.ANALYSES}
 
@@ -29,8 +51,16 @@ def test_pipeline_has_expected_analyses():
     }
 
 
+def test_pipeline_has_monthly_bi_export():
+    """The pipeline must include the monthly BI dataset."""
+
+    names = {export["name"] for export in run_pipeline.BI_EXPORTS}
+
+    assert "BI Monthly Sales" in names
+
+
 def test_database_connection_uses_configuration(monkeypatch):
-    """Database connection settings must use environment variables."""
+    """Connection settings must use environment variables."""
 
     monkeypatch.setenv("ECOMMERCE_DB_HOST", "localhost")
     monkeypatch.setenv("ECOMMERCE_DB_PORT", "5432")
@@ -49,56 +79,79 @@ def test_database_connection_uses_configuration(monkeypatch):
     assert kwargs["user"] == "ecommerce_user"
     assert kwargs["password"] == "test-password"
     assert kwargs["connect_timeout"] == 10
-
-
-def create_mock_connection(result=(1,)):
-    """Build a mock connection compatible with context managers."""
-
-    mock_connection = MagicMock()
-    mock_cursor = MagicMock()
-
-    mock_connection.__enter__.return_value = mock_connection
-    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-    mock_cursor.fetchone.return_value = result
-
-    return mock_connection, mock_cursor
+    assert kwargs["autocommit"] is True
+    assert "default_transaction_read_only=on" in kwargs["options"]
 
 
 def test_database_connection_validation():
     """A successful SELECT 1 validates database connectivity."""
 
-    mock_connection, mock_cursor = create_mock_connection(result=(1,))
+    connection, cursor = create_mock_connection(result=(1,))
 
     with patch(
         "src.run_pipeline.get_database_connection",
-        return_value=mock_connection,
+        return_value=connection,
     ):
         run_pipeline.validate_database_connection()
 
-    mock_cursor.execute.assert_called_once_with("SELECT 1")
+    cursor.execute.assert_called_once_with("SELECT 1")
 
 
 def test_invalid_database_response_is_rejected():
     """Unexpected database health-check results must fail."""
 
-    mock_connection, _ = create_mock_connection(result=(0,))
+    connection, _ = create_mock_connection(result=(0,))
 
     with (
         patch(
             "src.run_pipeline.get_database_connection",
-            return_value=mock_connection,
+            return_value=connection,
         ),
-        pytest.raises(
-            RuntimeError,
-            match="validation failed",
-        ),
+        pytest.raises(RuntimeError, match="validation failed"),
     ):
         run_pipeline.validate_database_connection()
 
 
+def test_quality_gate_passes():
+    """Nine successful quality checks must be accepted."""
+
+    connection, cursor = create_mock_connection(result=(9, 9, 0, "PASSED"))
+
+    run_pipeline.validate_quality_gate(connection)
+
+    assert cursor.execute.call_count == 2
+    cursor.execute.assert_any_call("SET TRANSACTION READ ONLY")
+
+
+def test_quality_gate_rejects_failed_checks():
+    """Failed quality checks must stop pipeline execution."""
+
+    connection, _ = create_mock_connection(result=(9, 8, 1, "FAILED"))
+
+    with pytest.raises(RuntimeError, match="quality gate FAILED"):
+        run_pipeline.validate_quality_gate(connection)
+
+
+def test_quality_gate_rejects_missing_checks():
+    """The quality gate must require all nine checks."""
+
+    connection, _ = create_mock_connection(result=(8, 8, 0, "PASSED"))
+
+    with pytest.raises(RuntimeError, match="quality gate FAILED"):
+        run_pipeline.validate_quality_gate(connection)
+
+
+def test_quality_gate_rejects_unexpected_result():
+    """Malformed quality gate results must be rejected."""
+
+    connection, _ = create_mock_connection(result=None)
+
+    with pytest.raises(RuntimeError, match="unexpected result"):
+        run_pipeline.validate_quality_gate(connection)
+
+
 def test_visualization_uses_python_interpreter():
-    """Visualization scripts must run with the active interpreter."""
+    """Visualizations must run with the active interpreter."""
 
     script_path = Path("/tmp/example_visualization.py")
 
@@ -132,18 +185,18 @@ def test_visualization_failure_is_propagated():
 
 
 def test_export_query_rejects_empty_sql(tmp_path):
-    """Empty SQL files must not produce exports."""
+    """An empty SQL file must not produce exports."""
 
     sql_path = tmp_path / "empty.sql"
     output_path = tmp_path / "output.csv"
 
     sql_path.write_text("", encoding="utf-8")
 
-    mock_connection = MagicMock()
+    connection = MagicMock()
 
     with pytest.raises(ValueError, match="Empty SQL"):
         run_pipeline.export_query(
-            mock_connection,
+            connection,
             sql_path,
             output_path,
         )
@@ -151,16 +204,43 @@ def test_export_query_rejects_empty_sql(tmp_path):
     assert not output_path.exists()
 
 
-def test_pipeline_stops_when_export_fails():
-    """A failed SQL export must prevent visualization execution."""
+def test_pipeline_stops_when_quality_gate_fails():
+    """A failed gate must prevent all exports and visualizations."""
 
-    mock_connection = MagicMock()
+    connection, _ = create_mock_connection()
 
     with (
         patch(
             "src.run_pipeline.get_database_connection",
-            return_value=mock_connection,
+            return_value=connection,
         ),
+        patch(
+            "src.run_pipeline.validate_quality_gate",
+            side_effect=RuntimeError("Quality gate failed"),
+        ),
+        patch("src.run_pipeline.export_query") as mock_export,
+        patch(
+            "src.run_pipeline.run_visualization",
+        ) as mock_visualization,
+        pytest.raises(RuntimeError, match="Quality gate failed"),
+    ):
+        run_pipeline.run_pipeline()
+
+    mock_export.assert_not_called()
+    mock_visualization.assert_not_called()
+
+
+def test_pipeline_stops_when_export_fails():
+    """A failed SQL export must prevent visualization execution."""
+
+    connection, _ = create_mock_connection()
+
+    with (
+        patch(
+            "src.run_pipeline.get_database_connection",
+            return_value=connection,
+        ),
+        patch("src.run_pipeline.validate_quality_gate"),
         patch(
             "src.run_pipeline.export_query",
             side_effect=psycopg.OperationalError("Simulated database error"),
@@ -178,16 +258,19 @@ def test_pipeline_stops_when_export_fails():
     mock_visualization.assert_not_called()
 
 
-def test_pipeline_processes_every_analysis():
-    """Successful execution must export and visualize each analysis."""
+def test_pipeline_processes_every_analysis_and_bi_export():
+    """Successful runs must execute every configured step."""
 
-    mock_connection = MagicMock()
+    connection, _ = create_mock_connection()
 
     with (
         patch(
             "src.run_pipeline.get_database_connection",
-            return_value=mock_connection,
+            return_value=connection,
         ),
+        patch(
+            "src.run_pipeline.validate_quality_gate",
+        ) as mock_gate,
         patch(
             "src.run_pipeline.export_query",
         ) as mock_export,
@@ -197,7 +280,10 @@ def test_pipeline_processes_every_analysis():
     ):
         run_pipeline.run_pipeline()
 
-    assert mock_export.call_count == len(run_pipeline.ANALYSES)
+    expected_exports = len(run_pipeline.ANALYSES) + len(run_pipeline.BI_EXPORTS)
+
+    mock_gate.assert_called_once_with(connection)
+    assert mock_export.call_count == expected_exports
     assert mock_visualization.call_count == len(run_pipeline.ANALYSES)
 
 
