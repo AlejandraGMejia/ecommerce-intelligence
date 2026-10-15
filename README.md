@@ -32,7 +32,7 @@ The project combines:
 5. Which geographic regions generate the most business activity?
 6. How do customer retention and purchasing patterns evolve?
 
-The first five questions have been investigated. Customer retention and cohort analysis are planned.
+All six questions have been investigated through the existing analytical modules. Customer segmentation and additional business analyses are planned.
 
 ## 2. Technology Stack
 
@@ -43,6 +43,7 @@ The first five questions have been investigated. Customer retention and cohort a
 | PostgreSQL | Relational storage and integrity constraints |
 | SQL | Business analytics and KPI calculations |
 | Matplotlib | Executive visualizations |
+| NumPy | Numerical validation and cohort matrices |
 | Pytest | Automated testing |
 | Ruff | Python linting and formatting |
 | Git & GitHub | Version control |
@@ -83,6 +84,8 @@ The relational model includes:
 The `reviews` table uses an internal primary key because source `review_id` values are not unique.
 
 Product category translations are joined using the original category names. Missing translations are preserved rather than discarded.
+
+For customer retention, `customer_unique_id` is used to identify distinct buyers across multiple order-specific customer records.
 
 ## 4. Business Analysis
 
@@ -261,6 +264,114 @@ Customer location is used as a geographic approximation of purchasing activity. 
 
 These findings support further investigation of regional demand, order composition, product categories, and logistics before making geographic expansion recommendations.
 
+### 4.7 Customer Retention and Cohort Analysis
+
+Customer retention is investigated through two complementary approaches:
+
+1. **Repeat Purchase Analysis:** Identifying buyers with multiple delivered orders during the full observed period.
+2. **Monthly Cohort Retention:** Measuring purchasing activity in calendar months following each buyer's first delivered order.
+
+The analysis uses `customer_unique_id` rather than `customer_id` to identify buyers across different orders.
+
+Only delivered orders are included.
+
+#### Repeat Purchase Analysis
+
+The repeat purchase analysis calculates the number of distinct buyers, their purchase frequency, and the proportion who placed multiple delivered orders.
+
+**Customer Purchase Behavior KPIs**
+
+| Metric | Result |
+|---|---:|
+| Unique buyers | 93,358 |
+| One-time buyers | 90,557 |
+| Repeat buyers | 2,801 |
+| Repeat buyer rate | 3.00% |
+| Average delivered orders per buyer | 1.03 |
+| Maximum delivered orders by one buyer | 15 |
+
+**Purchase Frequency Distribution**
+
+| Delivered Orders per Buyer | Buyers |
+|---|---:|
+| 1 | 90,557 |
+| 2 | 2,573 |
+| 3 | 181 |
+| 4 | 28 |
+| 5 | 9 |
+| 6 | 5 |
+| 7 | 3 |
+| 9 | 1 |
+| 15 | 1 |
+
+**Key Findings**
+
+- Approximately **97.00%** of observed buyers placed exactly one delivered order.
+- Only **3.00%** placed two or more delivered orders.
+- Most repeat buyers placed exactly two delivered orders.
+- The most frequent buyer placed 15 delivered orders during the observed period.
+
+The low repeat purchase rate suggests an opportunity to investigate customer purchasing behavior and potential retention strategies.
+
+However, this metric should not be interpreted as a definitive customer churn rate.
+
+Customers entering near the end of the observation period had less time to make additional purchases.
+
+#### Monthly Cohort Retention
+
+Customers are grouped into cohorts based on the purchase month of their first delivered order.
+
+Each cohort represents buyers who made their first qualifying purchase during the same calendar month.
+
+Retention is calculated as:
+
+**Monthly Retention Rate (%) = Active Buyers in Cohort Month / Initial Cohort Size × 100**
+
+A buyer is counted once per activity month, even if they placed multiple qualifying orders in that month.
+
+The analysis covers **20 monthly cohorts**, from January 2017 through August 2018.
+
+![Monthly Customer Cohort Retention](reports/figures/customer_cohort_retention.png)
+
+**Example: January 2017 Cohort**
+
+| Metric | Result |
+|---|---:|
+| Initial cohort size | 717 buyers |
+| Month 0 retention | 100.00% |
+| Month 1 retention | 0.28% |
+| Month 2 retention | 0.28% |
+| Month 12 retention | 0.70% |
+
+**Key Findings**
+
+- Monthly repeat purchasing activity is low across the observed cohorts.
+- Only **0.28%** of the January 2017 cohort purchased again during the following calendar month.
+- Retention does not necessarily decrease continuously because customers may skip months and purchase again later.
+- More recent cohorts have shorter observable histories than older cohorts.
+- Monthly cohort retention provides a more time-sensitive view of customer behavior than the overall repeat buyer rate.
+
+**Interpreting the Heatmap**
+
+- **Month 0:** All buyers enter their cohort, so retention equals 100%.
+- **Positive percentages:** Buyers who returned during a specific calendar month.
+- **0.0%:** No returning buyers during an observable month, subject to display rounding.
+- **Gray cells:** Months outside the analysis observation window.
+
+The color scale is optimized to distinguish low retention rates between 0% and 1%. Month-zero values are intentionally saturated and labeled 100%.
+
+This analysis uses **non-cumulative monthly retention**. A customer who purchases in month 2 but not month 1 contributes to month 2 retention only.
+
+**Analytical Limitations**
+
+Repeat purchase behavior and cohort retention are different metrics and should not be treated interchangeably.
+
+The dataset has a finite observation window, so purchasing activity after August 2018 is not included in the main cohort visualization.
+
+The cohort definition is based on the first delivered order's purchase timestamp. Earlier transactions with other statuses do not establish cohort membership.
+
+The analysis does not establish whether customers permanently churned or purchased again outside the available historical dataset.
+
 ## 5. Data Quality Findings
 
 Data quality is treated as a core component of the project rather than an optional cleanup step.
@@ -339,7 +450,35 @@ The delivered-item count was checked separately through SQL. The Python visualiz
 
 These checks confirm consistency for the historical Olist dataset used in this project.
 
-### 5.5 Analytical Reconciliation
+### 5.5 Customer Retention Data Quality
+
+Retention calculations use `customer_unique_id` to identify distinct buyers rather than counting order-specific customer records as separate individuals.
+
+The repeat purchase analysis reconciles:
+
+- **93,358** distinct buyers.
+- **96,478** delivered orders.
+- **2,801** buyers with more than one delivered order.
+
+Monthly cohort calculations enforce a distinction between periods without returning buyers and periods outside the observation window.
+
+**Cohort Data Validation**
+
+The Python validation workflow checks:
+
+- Required cohort columns.
+- Missing cohort values.
+- Duplicate cohort-month combinations.
+- Positive cohort sizes.
+- Nonnegative cohort ages.
+- Valid active buyer counts.
+- Retention percentages consistent with cohort sizes.
+- Activity restricted to the observation window.
+- Month-zero retention of 100% across the complete set of cohorts.
+
+These checks support consistent cohort reporting and help prevent misleading visualizations.
+
+### 5.6 Analytical Reconciliation
 
 Joining delivered order items with the product catalog preserved the overall delivered-order item value:
 
@@ -351,6 +490,7 @@ Additional reconciliation confirmed:
 - 96,184 valid orders in the January 2017–August 2018 monthly delivery analysis.
 - 95,801 valid delivered orders with at least one review in the satisfaction analysis.
 - 96,478 delivered orders in the geographic sales analysis.
+- 96,478 delivered orders linked to 93,358 unique buyers in the repeat purchase analysis.
 
 These populations intentionally differ because each analysis applies its own business rules.
 
@@ -370,7 +510,8 @@ ecommerce-intelligence/
 │       ├── top_categories.png
 │       ├── monthly_delivery_performance.png
 │       ├── delivery_vs_satisfaction.png
-│       └── geographic_performance.png
+│       ├── geographic_performance.png
+│       └── customer_cohort_retention.png
 ├── sql/
 │   ├── 01_create_tables.sql
 │   ├── 02_business_kpis.sql
@@ -382,7 +523,9 @@ ecommerce-intelligence/
 │   ├── 08_monthly_delivery_performance.sql
 │   ├── 09_create_reviews_table.sql
 │   ├── 10_delivery_vs_reviews.sql
-│   └── 11_geographic_performance.sql
+│   ├── 11_geographic_performance.sql
+│   ├── 12_customer_retention.sql
+│   └── 13_customer_cohorts.sql
 ├── src/
 │   ├── business_rules.py
 │   ├── explore_data.py
@@ -395,8 +538,10 @@ ecommerce-intelligence/
 │   ├── visualize_categories.py
 │   ├── visualize_delivery.py
 │   ├── visualize_satisfaction.py
-│   └── visualize_geography.py
+│   ├── visualize_geography.py
+│   └── visualize_cohorts.py
 ├── tests/
+│   ├── test_customer_cohorts.py
 │   ├── test_data_quality.py
 │   ├── test_delivery_rules.py
 │   ├── test_geographic_performance.py
@@ -406,7 +551,7 @@ ecommerce-intelligence/
 └── requirements.txt
 ```
 
-Raw datasets are excluded from version control.
+Raw datasets and intermediate analytical CSV files are excluded from version control.
 
 ## 7. Reproducing the Project
 
@@ -526,6 +671,12 @@ psql -h localhost -U ecommerce_user -d ecommerce_db \
 
 psql -h localhost -U ecommerce_user -d ecommerce_db \
   -f sql/11_geographic_performance.sql
+
+psql -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/12_customer_retention.sql
+
+psql -h localhost -U ecommerce_user -d ecommerce_db \
+  -f sql/13_customer_cohorts.sql
 ```
 
 ### 7.9 Generate Visualizations
@@ -538,7 +689,21 @@ python src/visualize_satisfaction.py
 python src/visualize_geography.py
 ```
 
+The cohort heatmap additionally requires a local CSV export from its SQL query:
+
+```bash
+psql -X -v ON_ERROR_STOP=1 \
+  -h localhost -U ecommerce_user -d ecommerce_db \
+  --csv \
+  -f sql/13_customer_cohorts.sql \
+  -o data/processed/customer_cohorts.csv
+
+python src/visualize_cohorts.py
+```
+
 Generated charts are saved under `reports/figures/`.
+
+The intermediate cohort CSV is not committed to the repository.
 
 ### 7.10 Run Quality Checks
 
@@ -548,11 +713,11 @@ ruff format --check src/ tests/
 python -m pytest tests/ -v
 ```
 
-**Current automated test status: 24 passing tests.**
+**Current automated test status: 30 passing tests.**
 
-The test suite covers selected data quality rules, source validation functions, delivery date logic, and geographic KPI validation.
+The test suite covers selected data quality rules, source validation functions, delivery date logic, geographic KPI validation, and monthly cohort matrix behavior.
 
-Geographic tests use synthetic data to verify that duplicate states and incorrect aggregate totals are rejected.
+Cohort tests use synthetic data to check valid retention percentages, zero-activity periods, unobservable months, invalid future activity, and incomplete initial cohorts.
 
 These tests do not yet provide complete end-to-end database integration coverage.
 
@@ -568,6 +733,11 @@ These tests do not yet provide complete end-to-end database integration coverage
 - Geographic analysis uses customer location, not seller location or fulfillment origin.
 - High average item values in smaller states require additional investigation before supporting business recommendations.
 - The 500-order threshold in the geographic visualization is a descriptive filter rather than a statistical guarantee.
+- Overall repeat purchase rate and monthly cohort retention measure different aspects of customer behavior.
+- The finite observation window creates unequal follow-up opportunities for early and recent customer cohorts.
+- Cohorts are based on the purchase dates of orders ultimately marked as delivered.
+- The customer analysis does not establish permanent churn or predict future retention.
+- Cohort analysis currently relies on a manually generated intermediate CSV and a fixed reporting window.
 - Some validation rules use known Olist record counts and monetary totals, limiting immediate reuse with other datasets.
 - Existing-data checks in the loaders rely primarily on record counts rather than full content reconciliation.
 - The `--reload` option in `src/load_data.py` has not been updated and integration-tested for the additional `reviews` foreign-key dependency. It must not be used on the current database until this is resolved.
@@ -580,7 +750,6 @@ Planned improvements include:
 
 ### Data Analytics
 
-- Customer retention and cohort analysis
 - Customer segmentation and RFM analysis
 - Customer lifetime value estimates with explicit methodological limitations
 - A consolidated executive dashboard
