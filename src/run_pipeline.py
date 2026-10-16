@@ -51,6 +51,11 @@ BI_EXPORTS = (
         "sql": PROJECT_ROOT / "sql" / "17_bi_monthly_sales.sql",
         "csv": PROCESSED_DIR / "bi_monthly_sales.csv",
     },
+    {
+        "name": "BI Executive KPIs",
+        "sql": PROJECT_ROOT / "sql" / "19_bi_executive_kpis.sql",
+        "csv": PROCESSED_DIR / "bi_executive_kpis.csv",
+    },
 )
 
 logging.basicConfig(
@@ -247,14 +252,11 @@ def run_pipeline() -> None:
     validate_configuration()
 
     with get_database_connection() as connection:
-        # The quality gate runs before any analytical exports.
+        # Stop before exporting if data mart quality checks fail.
         validate_quality_gate(connection)
 
         for analysis in ANALYSES:
-            logger.info(
-                "Processing: %s",
-                analysis["name"],
-            )
+            logger.info("Processing: %s", analysis["name"])
 
             export_query(
                 connection=connection,
@@ -262,23 +264,14 @@ def run_pipeline() -> None:
                 output_path=analysis["csv"],
             )
 
-            logger.info(
-                "CSV exported: %s",
-                analysis["csv"].name,
-            )
+            logger.info("CSV exported: %s", analysis["csv"].name)
 
             run_visualization(analysis["script"])
 
-            logger.info(
-                "Completed: %s",
-                analysis["name"],
-            )
+            logger.info("Completed: %s", analysis["name"])
 
         for export in BI_EXPORTS:
-            logger.info(
-                "Processing: %s",
-                export["name"],
-            )
+            logger.info("Processing: %s", export["name"])
 
             export_query(
                 connection=connection,
@@ -286,10 +279,7 @@ def run_pipeline() -> None:
                 output_path=export["csv"],
             )
 
-            logger.info(
-                "BI CSV exported: %s",
-                export["csv"].name,
-            )
+            logger.info("BI CSV exported: %s", export["csv"].name)
 
     logger.info("Pipeline completed successfully")
 
