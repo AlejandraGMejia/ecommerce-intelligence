@@ -780,6 +780,8 @@ The generated PNG visualizes the ten highest-ranked categories.
 
 ### 4.11 Interactive Power BI Executive Report
 
+![Power BI Executive Dashboard](reports/figures/powerbi_executive_dashboard.png)
+
 A Power BI web report titled:
 
 **E-Commerce Intelligence | Executive Dashboard**
