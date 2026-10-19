@@ -9,13 +9,13 @@
 --
 -- BUSINESS RULES:
 -- 1. Include only delivered orders.
--- 2. Exclude freight from item value.
--- 3. Count each order once per category.
--- 4. Preserve untranslated and missing categories.
--- 5. Item value is not net revenue or profit.
+-- 2. Use purchase dates from January 2017 through August 2018.
+-- 3. Exclude freight from item value.
+-- 4. Count each order once per category.
+-- 5. Preserve untranslated and missing categories.
+-- 6. Item value is not net revenue or profit.
 --
--- The dataset covers the complete historical period,
--- matching the original category analysis.
+-- The reporting period matches sql/17_bi_monthly_sales.sql.
 -- ============================================================
 
 WITH category_order_values AS (
@@ -32,8 +32,8 @@ WITH category_order_values AS (
 
     FROM order_items AS oi
 
-    INNER JOIN orders AS o
-        ON oi.order_id = o.order_id
+    INNER JOIN analytics_order_summary AS aos
+        ON oi.order_id = aos.order_id
 
     INNER JOIN products AS p
         ON oi.product_id = p.product_id
@@ -41,7 +41,8 @@ WITH category_order_values AS (
     LEFT JOIN product_categories AS pc
         ON p.product_category_name = pc.product_category_name
 
-    WHERE o.order_status = 'delivered'
+    WHERE aos.purchase_month >= DATE '2017-01-01'
+      AND aos.purchase_month < DATE '2018-09-01'
 
     GROUP BY
         COALESCE(
