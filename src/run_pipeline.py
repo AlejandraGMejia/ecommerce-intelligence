@@ -1,3 +1,4 @@
+
 """Run validated e-commerce analytics exports and visualizations.
 
 Features:
@@ -55,6 +56,11 @@ BI_EXPORTS = (
         "name": "BI Executive KPIs",
         "sql": PROJECT_ROOT / "sql" / "19_bi_executive_kpis.sql",
         "csv": PROCESSED_DIR / "bi_executive_kpis.csv",
+    },
+    {
+        "name": "BI Category Performance",
+        "sql": PROJECT_ROOT / "sql" / "20_bi_category_performance.sql",
+        "csv": PROCESSED_DIR / "bi_category_performance.csv",
     },
 )
 
