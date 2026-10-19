@@ -1,13 +1,48 @@
-
 # E-Commerce Intelligence
 
-**End-to-End Data Analytics & Data Engineering Portfolio Project**
+**End-to-End Data Analytics & Data Engineering | Python · SQL · PostgreSQL · Power BI**
 
-An end-to-end e-commerce analytics project based on the Brazilian E-Commerce Public Dataset by Olist.
+An end-to-end analytics project transforming historical Brazilian e-commerce transactions into validated business insights, automated data pipelines, and interactive reporting.
 
-This project transforms historical transactional data into business insights using Python, PostgreSQL, SQL, relational data modeling, data quality validation, automated analytical pipelines, automated testing, and executive visualizations.
+Based on the [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce).
 
-**Project Status:** In Development — Six Analytical Modules, Automated BI Data Mart, Category Visualizations, and Interactive Power BI Executive Report Implemented
+## Project Highlights
+
+| Metric | Result |
+|---|---:|
+| Delivered orders (full history) | **96,478** |
+| Delivered item value (full history) | **R$ 13.22M** |
+| Automated data quality checks | **9/9 passed** |
+| Automated Python tests | **63 passed** |
+
+## What This Project Demonstrates
+
+- **Data Engineering:** PostgreSQL relational modeling, data ingestion, analytical views, automated pipelines, and atomic CSV exports.
+- **Data Analytics:** SQL-driven commercial analysis, delivery performance, customer retention, RFM segmentation, and category performance.
+- **Business Intelligence:** Interactive Power BI reporting, executive KPIs, monthly trends, and date filtering.
+- **Data Quality:** Metric reconciliation, validation gates, automated testing, and reproducible workflows.
+
+## Selected Visualizations
+
+**Monthly E-Commerce Performance**
+
+![Monthly E-Commerce Performance](reports/figures/monthly_sales_executive.png)
+
+**Top 10 Product Categories — BI Reporting Period**
+
+![Top 10 Product Categories](reports/figures/bi_top_product_categories.png)
+
+**Customer RFM Segmentation**
+
+![Customer RFM Segmentation](reports/figures/customer_rfm_segmentation.png)
+
+## Technical Architecture
+
+`Olist CSVs → Python Ingestion → PostgreSQL → SQL Analytics & Data Mart → Quality Gate → Automated Exports → Matplotlib / Power BI`
+
+**Current implementation:** Six analytical modules, five automated CSV exports, eight portfolio visualizations, and an interactive Power BI executive report.
+
+**Reporting scope:** Historical data. Executive BI metrics cover January 2017–August 2018; full-history results are identified separately. Delivered item value excludes freight and is not net revenue or profit.
 
 ---
 
