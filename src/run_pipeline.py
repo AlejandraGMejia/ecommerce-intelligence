@@ -61,6 +61,7 @@ BI_EXPORTS = (
         "name": "BI Category Performance",
         "sql": PROJECT_ROOT / "sql" / "20_bi_category_performance.sql",
         "csv": PROCESSED_DIR / "bi_category_performance.csv",
+        "script": PROJECT_ROOT / "src" / "visualize_bi_categories.py",
     },
 )
 
@@ -83,6 +84,9 @@ def validate_configuration() -> None:
 
     for export in BI_EXPORTS:
         required_files.append(export["sql"])
+
+        if "script" in export:
+            required_files.append(export["script"])
 
     for path in required_files:
         if not path.is_file():
@@ -219,7 +223,10 @@ def export_query(
             ):
                 cursor.execute("SET TRANSACTION READ ONLY")
 
-                copy_sql = f"COPY ({sql}) TO STDOUT WITH (FORMAT CSV, HEADER TRUE)"
+                copy_sql = (
+                    f"COPY ({sql}) TO STDOUT "
+                    "WITH (FORMAT CSV, HEADER TRUE)"
+                )
 
                 with cursor.copy(copy_sql) as copy:
                     for chunk in copy:
@@ -287,6 +294,13 @@ def run_pipeline() -> None:
 
             logger.info("BI CSV exported: %s", export["csv"].name)
 
+            if "script" in export:
+                run_visualization(export["script"])
+                logger.info(
+                    "Visualization completed: %s",
+                    export["name"],
+                )
+
     logger.info("Pipeline completed successfully")
 
 
@@ -294,7 +308,10 @@ def main() -> int:
     """Run a connection check or the complete analytical pipeline."""
 
     parser = argparse.ArgumentParser(
-        description=("Run validated e-commerce analytical exports and visualizations.")
+        description=(
+            "Run validated e-commerce analytical exports "
+            "and visualizations."
+        )
     )
 
     parser.add_argument(
