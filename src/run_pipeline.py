@@ -1,4 +1,3 @@
-
 """Run validated e-commerce analytics exports and visualizations.
 
 Features:
@@ -223,10 +222,7 @@ def export_query(
             ):
                 cursor.execute("SET TRANSACTION READ ONLY")
 
-                copy_sql = (
-                    f"COPY ({sql}) TO STDOUT "
-                    "WITH (FORMAT CSV, HEADER TRUE)"
-                )
+                copy_sql = f"COPY ({sql}) TO STDOUT WITH (FORMAT CSV, HEADER TRUE)"
 
                 with cursor.copy(copy_sql) as copy:
                     for chunk in copy:
@@ -308,10 +304,7 @@ def main() -> int:
     """Run a connection check or the complete analytical pipeline."""
 
     parser = argparse.ArgumentParser(
-        description=(
-            "Run validated e-commerce analytical exports "
-            "and visualizations."
-        )
+        description=("Run validated e-commerce analytical exports and visualizations.")
     )
 
     parser.add_argument(

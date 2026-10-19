@@ -284,7 +284,10 @@ def test_pipeline_processes_every_analysis_and_bi_export():
 
     mock_gate.assert_called_once_with(connection)
     assert mock_export.call_count == expected_exports
-    assert mock_visualization.call_count == len(run_pipeline.ANALYSES)
+    expected_visualizations = len(run_pipeline.ANALYSES) + sum(
+        "script" in export for export in run_pipeline.BI_EXPORTS
+    )
+    assert mock_visualization.call_count == expected_visualizations
 
 
 def test_check_mode_does_not_run_exports(monkeypatch):

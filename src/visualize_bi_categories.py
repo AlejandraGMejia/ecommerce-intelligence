@@ -1,4 +1,3 @@
-
 """Visualize the top product categories for the BI reporting period."""
 
 import csv
@@ -14,13 +13,9 @@ from matplotlib.ticker import FuncFormatter
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-INPUT_PATH = (
-    PROJECT_ROOT / "data" / "processed" / "bi_category_performance.csv"
-)
+INPUT_PATH = PROJECT_ROOT / "data" / "processed" / "bi_category_performance.csv"
 
-OUTPUT_PATH = (
-    PROJECT_ROOT / "reports" / "figures" / "bi_top_product_categories.png"
-)
+OUTPUT_PATH = PROJECT_ROOT / "reports" / "figures" / "bi_top_product_categories.png"
 
 EXPECTED_COLUMNS = {
     "category_rank",
@@ -56,9 +51,7 @@ def load_categories() -> list[dict]:
 
     categories.sort(key=lambda item: item["rank"])
 
-    if [item["rank"] for item in categories] != list(
-        range(1, len(categories) + 1)
-    ):
+    if [item["rank"] for item in categories] != list(range(1, len(categories) + 1)):
         raise ValueError("Invalid category ranking.")
 
     if len({item["category"] for item in categories}) != len(categories):
@@ -75,10 +68,7 @@ def create_chart(categories: list[dict]) -> None:
 
     top_ten = categories[:10]
 
-    labels = [
-        item["category"].replace("_", " ").title()
-        for item in reversed(top_ten)
-    ]
+    labels = [item["category"].replace("_", " ").title() for item in reversed(top_ten)]
     values = [float(item["value"]) for item in reversed(top_ten)]
 
     fig, ax = plt.subplots(figsize=(12, 7))
@@ -123,8 +113,7 @@ def create_chart(categories: list[dict]) -> None:
     fig.text(
         0.12,
         0.015,
-        "Delivered orders | Jan 2017 – Aug 2018 | "
-        "Item value excludes freight",
+        "Delivered orders | Jan 2017 – Aug 2018 | Item value excludes freight",
         fontsize=9,
         color="#64748B",
     )
